@@ -1,0 +1,5 @@
+# Certrificates must be generated and renewed independantly for each machine
+certs/*.pem
+
+# .env files must never be versioned
+.env

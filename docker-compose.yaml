@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.1.4
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=https"
+      - "traefik.http.routers.traefik.rule=Host(`${RGPRP_HOSTNAME}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_USER}"
+      - "traefik.http.routers.traefik.tls=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/etc/traefik/certs"
+      - "./docker/traefik.yaml:/etc/traefik/traefik.yml"
+      - "./docker/ssl.yaml:/etc/traefik/ssl.yml"
+    networks:
+      - "reverse-proxy"
+
+networks:
+  reverse-proxy:
+    external: true
