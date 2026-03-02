@@ -1,4 +1,4 @@
-Welcome to the documentation for Regaprose Reverse Proxy (RGPRP). This is a dockerized app that uses traefik to allow developers to work on various projects, all running in the background in the same time.
+Welcome to the documentation for this Reverse Proxy. This is a dockerized app that uses traefik to allow developers to work on various projects, all running in the background in the same time.
 
 ## Table of Contents
 

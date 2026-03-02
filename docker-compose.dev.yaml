@@ -1,0 +1,18 @@
+services:
+  mailcatcher:
+    image: schickling/mailcatcher
+    container_name: mailcatcher
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse-proxy"
+      - "traefik.http.routers.mailcatcher-web.rule=Host(`mailcatcher.local.com`)"
+      - "traefik.http.routers.mailcatcher-web.entrypoints=http,https"
+      - "traefik.http.routers.mailcatcher-web.tls=true"
+      - "traefik.http.services.mailcatcher-web.loadbalancer.server.port=1080"
+    networks:
+      - "reverse-proxy"
+
+networks:
+  reverse-proxy:
+    external: true

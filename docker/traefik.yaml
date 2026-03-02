@@ -25,3 +25,11 @@ providers:
   file:
     filename: /etc/traefik/ssl.yml
     watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: $ACME_EMAIL
+      storage: /etc/traefik/acme/acme.json
+      httpChallenge:
+        entryPoint: http

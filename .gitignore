@@ -1,5 +1,8 @@
 # Certrificates must be generated and renewed independantly for each machine
 certs/*.pem
 
+# ACME/Let's Encrypt data must not be versioned
+acme/acme.json
+
 # .env files must never be versioned
 .env
