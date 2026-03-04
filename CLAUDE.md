@@ -40,3 +40,12 @@ networks:
 - `prod`: uses Let's Encrypt ACME via `ACME_EMAIL`; ACME state stored in `acme/acme.json` (git-ignored)
 
 **DNS note:** Never use `*.dev.` as a TLD — it is a protected gTLD and will cause resolution issues.
+
+## Task Templates
+
+Fill in and paste as specs after running the matching skill:
+
+| Prompt | Skill | Use when |
+|--------|-------|----------|
+| `prompts/add-route.md` | `/new-feature` | Connecting a new project to the proxy |
+| `prompts/fix-routing.md` | `/fix-bug` | A hostname is unreachable or misbehaving |
