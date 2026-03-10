@@ -1,0 +1,7 @@
+[
+  {
+    "name": "dedibox-1",
+    "environment": "production-dedibox-1",
+    "deploy_path": "/opt/reverse-proxy"
+  }
+]

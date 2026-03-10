@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose config
+        run: docker compose -f docker-compose.yaml config --quiet
+
+  prepare:
+    name: Prepare matrix
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: echo "matrix=$(cat .github/deploy-targets.json)" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy (${{ matrix.server.name }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.server.environment }}
+    steps:
+      - name: Deploy to ${{ matrix.server.name }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ matrix.server.deploy_path }}
+            git pull
+            make deploy

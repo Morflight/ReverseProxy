@@ -1,0 +1,6 @@
+services:
+  traefik:
+    volumes:
+      - type: bind
+        source: ./docker/ssl.prod.yaml
+        target: /etc/traefik/ssl.yml

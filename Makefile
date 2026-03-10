@@ -16,6 +16,8 @@ ifeq ($(ENV), dev)
     DOCKER_ENV_FLAG = -f docker-compose.dev.yaml
 else ifeq ($(ENV), local)
     DOCKER_ENV_FLAG = -f docker-compose.dev.yaml
+else ifeq ($(ENV), prod)
+    DOCKER_ENV_FLAG = -f docker-compose.prod.yaml
 else
     DOCKER_ENV_FLAG =
 endif
