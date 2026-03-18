@@ -58,8 +58,12 @@ jobs:
           sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" > /tmp/decrypted.json
           echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
-          jq -r '.ci.ssh_private_key' /tmp/decrypted.json > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
+          SSH_KEY=$(jq -r '.ci.ssh_private_key' /tmp/decrypted.json)
+          echo "::add-mask::$SSH_KEY"
+          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "ssh_key<<$EOF_MARKER" >> $GITHUB_OUTPUT
+          echo "$SSH_KEY" >> $GITHUB_OUTPUT
+          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
           jq -r '.app | to_entries | .[] | .key + "=" + .value' /tmp/decrypted.json > /tmp/app.env
           rm /tmp/decrypted.json
         env:
@@ -70,22 +74,25 @@ jobs:
         with:
           host: ${{ steps.ci.outputs.ssh_host }}
           username: ${{ steps.ci.outputs.ssh_user }}
-          key_path: /tmp/deploy_key
+          key: ${{ steps.ci.outputs.ssh_key }}
           script: |
             cd ${{ matrix.server.deploy_path }}
             git pull
 
       - name: Inject env
         run: |
+          echo "${{ steps.ci.outputs.ssh_key }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
           scp -i /tmp/deploy_key -o StrictHostKeyChecking=no \
             /tmp/app.env ${{ steps.ci.outputs.ssh_user }}@${{ steps.ci.outputs.ssh_host }}:${{ matrix.server.deploy_path }}/.env
+          rm /tmp/deploy_key
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ steps.ci.outputs.ssh_host }}
           username: ${{ steps.ci.outputs.ssh_user }}
-          key_path: /tmp/deploy_key
+          key: ${{ steps.ci.outputs.ssh_key }}
           script: |
             cd ${{ matrix.server.deploy_path }}
             make deploy
