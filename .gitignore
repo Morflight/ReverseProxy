@@ -6,3 +6,6 @@ acme/acme.json
 
 # .env files must never be versioned
 .env
+
+# Decrypted SOPS env files must never be versioned
+envs/*.dec

@@ -1,4 +1,4 @@
-.PHONY: create-network deploy start stop generate-certificates-dev
+.PHONY: create-network check-env deploy start stop generate-certificates-dev
 
 ifeq ($(wildcard .env),)
     $(info Creating .env file from .env.dist)
@@ -25,7 +25,22 @@ endif
 create-network:
 	docker network create --driver=bridge --attachable --internal=false reverse-proxy
 
-deploy: stop start
+check-env:
+	@missing=0; \
+	for key in $$(grep -oP '^[A-Z_]+(?==)' .env.dist); do \
+		if ! grep -qP "^$$key=" .env 2>/dev/null; then \
+			echo "Missing env var: $$key (defined in .env.dist but not in .env)"; \
+			missing=1; \
+		fi; \
+	done; \
+	if [ "$$missing" = "1" ]; then \
+		echo ""; \
+		echo "Fix: add the missing variable(s) to .env"; \
+		exit 1; \
+	fi; \
+	echo "All env vars present."
+
+deploy: check-env stop start
 
 start:
 	docker compose -f docker-compose.yaml $(DOCKER_ENV_FLAG) up --build -d

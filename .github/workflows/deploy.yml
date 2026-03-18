@@ -6,17 +6,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  validate:
     name: Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validate docker-compose config
         run: docker compose -f docker-compose.yaml config --quiet
+      - name: Check encrypted env files exist for all deploy targets
+        run: |
+          for name in $(jq -r '.[].name' .github/deploy-targets.json); do
+            if [ ! -f "envs/${name}.enc" ]; then
+              echo "Missing encrypted env file: envs/${name}.enc"
+              exit 1
+            fi
+          done
+          echo "All encrypted env files present."
 
   prepare:
     name: Prepare matrix
-    needs: build
+    needs: validate
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -35,13 +44,48 @@ jobs:
       fail-fast: false
     environment: ${{ matrix.server.environment }}
     steps:
-      - name: Deploy to ${{ matrix.server.name }}
+      - uses: actions/checkout@v4
+
+      - name: Install SOPS
+        run: |
+          curl -LO https://github.com/getsops/sops/releases/download/v3.12.2/sops-v3.12.2.linux.amd64
+          chmod +x sops-v3.12.2.linux.amd64
+          sudo mv sops-v3.12.2.linux.amd64 /usr/local/bin/sops
+
+      - name: Decrypt and extract secrets
+        id: ci
+        run: |
+          sops -d --output-type json "envs/${{ matrix.server.name }}.enc" > /tmp/decrypted.json
+          echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
+          echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
+          jq -r '.ci.ssh_private_key' /tmp/decrypted.json > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          jq -r '.app | to_entries | .[] | .key + "=" + .value' /tmp/decrypted.json > /tmp/app.env
+          rm /tmp/decrypted.json
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+
+      - name: Deploy code
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ steps.ci.outputs.ssh_host }}
+          username: ${{ steps.ci.outputs.ssh_user }}
+          key_path: /tmp/deploy_key
           script: |
             cd ${{ matrix.server.deploy_path }}
             git pull
+
+      - name: Inject env
+        run: |
+          scp -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+            /tmp/app.env ${{ steps.ci.outputs.ssh_user }}@${{ steps.ci.outputs.ssh_host }}:${{ matrix.server.deploy_path }}/.env
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.ci.outputs.ssh_host }}
+          username: ${{ steps.ci.outputs.ssh_user }}
+          key_path: /tmp/deploy_key
+          script: |
+            cd ${{ matrix.server.deploy_path }}
             make deploy
