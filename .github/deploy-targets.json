@@ -1,7 +1,7 @@
 [
   {
     "name": "dedibox-1",
-    "environment": "production-dedibox-1",
+    "environment": "regaprose-prod-dedibox",
     "deploy_path": "/opt/reverse-proxy"
   }
 ]
