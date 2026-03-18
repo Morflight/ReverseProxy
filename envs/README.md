@@ -1,6 +1,7 @@
 # Encrypted Environment Files
 
-Each deploy target has its own SOPS-encrypted `.env` file: `<server-name>.enc`.
+Each deploy target has its own SOPS-encrypted YAML file: `<server-name>.enc.yaml`.
+The `.yaml` extension is required — SOPS uses it to detect the format and encrypt per-key.
 The server name must match the `name` field in `.github/deploy-targets.json`.
 
 ## Prerequisites
@@ -25,19 +26,19 @@ mv key.txt ~/.config/sops/age/keys.txt
 ## Create a new encrypted env file
 
 ```bash
-sops envs/dedibox-1.enc
+sops envs/dedibox-1.enc.yaml
 # This opens $EDITOR — write your .env content, save, and SOPS encrypts it
 ```
 
 ## Edit an existing encrypted env file
 
 ```bash
-sops envs/dedibox-1.enc
+sops envs/dedibox-1.enc.yaml
 # Opens decrypted in $EDITOR — edit, save, SOPS re-encrypts automatically
 ```
 
 ## View without editing
 
 ```bash
-sops -d envs/dedibox-1.enc
+sops -d envs/dedibox-1.enc.yaml
 ```

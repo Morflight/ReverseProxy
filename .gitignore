@@ -8,4 +8,4 @@ acme/acme.json
 .env
 
 # Decrypted SOPS env files must never be versioned
-envs/*.dec
+envs/*.dec.*

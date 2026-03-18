@@ -16,8 +16,8 @@ jobs:
       - name: Check encrypted env files exist for all deploy targets
         run: |
           for name in $(jq -r '.[].name' .github/deploy-targets.json); do
-            if [ ! -f "envs/${name}.enc" ]; then
-              echo "Missing encrypted env file: envs/${name}.enc"
+            if [ ! -f "envs/${name}.enc.yaml" ]; then
+              echo "Missing encrypted env file: envs/${name}.enc.yaml"
               exit 1
             fi
           done
@@ -55,7 +55,7 @@ jobs:
       - name: Decrypt and extract secrets
         id: ci
         run: |
-          sops -d --output-type json "envs/${{ matrix.server.name }}.enc" > /tmp/decrypted.json
+          sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" > /tmp/decrypted.json
           echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           jq -r '.ci.ssh_private_key' /tmp/decrypted.json > /tmp/deploy_key

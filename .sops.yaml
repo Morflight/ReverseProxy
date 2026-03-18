@@ -1,3 +1,3 @@
 creation_rules:
-  - path_regex: envs/.*\.enc$
+  - path_regex: envs/.*\.enc\.yaml$
     age: "age12phpyyr8ddgun4wjhckwr9rns87wnk4c6vxemqgfdfmn4txl23qsxp2vpc"
