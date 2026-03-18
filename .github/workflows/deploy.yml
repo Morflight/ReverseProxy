@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: set-matrix
-        run: echo "matrix=$(cat .github/deploy-targets.json)" >> $GITHUB_OUTPUT
+        run: echo "matrix=$(jq -c . .github/deploy-targets.json)" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy (${{ matrix.server.name }})
