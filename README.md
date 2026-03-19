@@ -37,6 +37,19 @@ To get started, follow these steps:
 2. **Start Traefik**: run `make start`, you must do this every time you restart your machine
 3. **Add a DNS record for Traefik**: edit your /etc/hosts file and add the following line: `127.0.0.1 traefik.local.com`
 4. **Generate your certificates to enable https**: run `make generate-certificates-dev`
+5. **Trust the certificates in your browser**:
+   - **Linux**: `mkcert -install` (done automatically by step 4) handles it.
+   - **WSL2**: the browser runs on Windows, so you need to install the root CA there too:
+     ```bash
+     # Copy the root CA to Windows
+     cp "$(mkcert -CAROOT)/rootCA.pem" /mnt/c/Users/<your-windows-user>/rootCA.pem
+     ```
+     Then open **PowerShell as Administrator** on Windows and run:
+     ```powershell
+     certutil -addstore "Root" C:\Users\<your-windows-user>\rootCA.pem
+     ```
+     Restart your browser for the change to take effect.
+   - **Firefox** (any OS): Firefox uses its own trust store. Go to `about:config` and set `security.enterprise_roots.enabled` to `true` to trust the system certificates.
 
 And that's it. Traefik is now running. You can access the dashboard at (https://traefik.local.com)[https://traefik.local.com].
 The default credentials are admin:admin, but you can modify them by tweaking the .env file.
