@@ -1,5 +1,7 @@
 services:
   traefik:
+    labels:
+      - "traefik.http.routers.traefik.tls.certresolver="
     volumes:
       - type: bind
         source: ./docker/ssl.prod.yaml
