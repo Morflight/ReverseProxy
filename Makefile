@@ -1,4 +1,5 @@
-.PHONY: create-network check-env deploy start stop generate-certificates-dev
+.PHONY: create-network check-env deploy start stop generate-certificates-dev \
+       server-init server-bootstrap server-clone server-deploy-env server-init-project server-status server-ssh
 
 ifeq ($(wildcard .env),)
     $(info Creating .env file from .env.dist)
@@ -55,3 +56,37 @@ generate-certificates-dev:
             -key-file certs/cert-key.pem \
             "*.local.com"; \
     fi
+
+
+##########################################
+##  Server Playbook (first-time setup)  ##
+##########################################
+
+SERVER ?= dedibox-1
+
+## Full first-time server setup (all phases)
+server-init: server-bootstrap server-clone server-deploy-env server-init-project
+
+## Phase 0: system deps, deploy user, Docker (SSH as root)
+server-bootstrap:
+	@SERVER=$(SERVER) bash playbook/scripts/00-bootstrap.sh
+
+## Phase 1: clone this repo on the server (SSH as deploy)
+server-clone:
+	@SERVER=$(SERVER) bash playbook/scripts/01-clone.sh
+
+## Phase 2: decrypt SOPS locally → SCP .env file
+server-deploy-env:
+	@SERVER=$(SERVER) bash playbook/scripts/02-deploy-env.sh
+
+## Phase 3: run init commands on the server
+server-init-project:
+	@SERVER=$(SERVER) bash playbook/scripts/03-init.sh
+
+## Health check: docker ps on server
+server-status:
+	@SERVER=$(SERVER) bash playbook/scripts/status.sh
+
+## Interactive SSH as deploy user
+server-ssh:
+	@SERVER=$(SERVER) bash playbook/scripts/ssh.sh
