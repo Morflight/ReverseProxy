@@ -1,1 +1,4 @@
-http: {}
+http:
+  routers: {}
+tls:
+  certificates: []
