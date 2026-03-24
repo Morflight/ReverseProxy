@@ -9,3 +9,15 @@ servers:
     init_commands:
       - make create-network
       - make start
+
+  ovh-vps-1:
+    host: 51.91.127.189
+    user: deploy
+    bootstrap_user: ubuntu
+    repo: git@github.com:Morflight/ReverseProxy.git
+    deploy_path: /opt/reverse-proxy
+    env_dest: .env
+    enc_file: envs/ovh-vps-1.enc.yaml
+    init_commands:
+      - make create-network
+      - make start

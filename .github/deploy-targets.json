@@ -3,5 +3,10 @@
     "name": "dedibox-1",
     "environment": "regaprose-prod-dedibox",
     "deploy_path": "/opt/reverse-proxy"
+  },
+  {
+    "name": "ovh-vps-1",
+    "environment": "conforme-prod-ovh",
+    "deploy_path": "/opt/reverse-proxy"
   }
 ]

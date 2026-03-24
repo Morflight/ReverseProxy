@@ -35,9 +35,173 @@ jobs:
       - id: set-matrix
         run: echo "matrix=$(jq -c . .github/deploy-targets.json)" >> $GITHUB_OUTPUT
 
+  bootstrap:
+    name: Bootstrap (${{ matrix.server.name }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SOPS
+        run: |
+          curl -LO https://github.com/getsops/sops/releases/download/v3.12.2/sops-v3.12.2.linux.amd64
+          chmod +x sops-v3.12.2.linux.amd64
+          sudo mv sops-v3.12.2.linux.amd64 /usr/local/bin/sops
+
+      - name: Decrypt secrets
+        id: ci
+        run: |
+          sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" > /tmp/decrypted.json
+          echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
+          echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
+          BOOTSTRAP_USER=$(jq -r '.ci.bootstrap_user // empty' /tmp/decrypted.json)
+          echo "bootstrap_user=${BOOTSTRAP_USER}" >> $GITHUB_OUTPUT
+          SSH_KEY=$(jq -r '.ci.ssh_private_key' /tmp/decrypted.json)
+          echo "::add-mask::$SSH_KEY"
+          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "ssh_key<<$EOF_MARKER" >> $GITHUB_OUTPUT
+          echo "$SSH_KEY" >> $GITHUB_OUTPUT
+          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+          rm /tmp/decrypted.json
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ steps.ci.outputs.ssh_key }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ steps.ci.outputs.ssh_host }} >> ~/.ssh/known_hosts
+
+      - name: Check if server is initialized
+        id: check
+        run: |
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+          if ssh -o ConnectTimeout=10 -o BatchMode=yes ${SSH_USER}@${SSH_HOST} \
+            "test -d ${DEPLOY_PATH}/.git" 2>/dev/null; then
+            echo "initialized=true" >> $GITHUB_OUTPUT
+            echo "Server already initialized — skipping bootstrap"
+          else
+            echo "initialized=false" >> $GITHUB_OUTPUT
+            echo "Server not initialized — will bootstrap"
+          fi
+
+      - name: Bootstrap server
+        if: steps.check.outputs.initialized == 'false'
+        run: |
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          BOOTSTRAP_USER="${{ steps.ci.outputs.bootstrap_user }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+
+          if [ -z "$BOOTSTRAP_USER" ]; then
+            echo "ERROR: Server not initialized and no bootstrap_user configured in SOPS"
+            exit 1
+          fi
+
+          ssh ${BOOTSTRAP_USER}@${SSH_HOST} \
+            "sudo DEPLOY_USER=${SSH_USER} BOOTSTRAP_USER=${BOOTSTRAP_USER} DEPLOY_PATH=${DEPLOY_PATH} bash -s" <<'EOF'
+          set -euo pipefail
+
+          echo "--- Updating system packages ---"
+          apt-get update -qq
+          apt-get upgrade -y -qq
+
+          echo "--- Installing base dependencies ---"
+          apt-get install -y -qq git curl ca-certificates gnupg make ufw rsync
+
+          echo "--- Installing Docker CE ---"
+          if ! command -v docker &>/dev/null; then
+            install -m 0755 -d /etc/apt/keyrings
+            . /etc/os-release
+            DOCKER_REPO_URL="https://download.docker.com/linux/${ID}"
+            curl -fsSL "${DOCKER_REPO_URL}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            chmod a+r /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${DOCKER_REPO_URL} ${VERSION_CODENAME} stable" \
+              > /etc/apt/sources.list.d/docker.list
+            apt-get update -qq
+            apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            echo "Docker installed."
+          else
+            echo "Docker already installed, skipping."
+          fi
+
+          echo "--- Creating deploy user: ${DEPLOY_USER} ---"
+          if ! id "${DEPLOY_USER}" &>/dev/null; then
+            useradd -m -s /bin/bash "${DEPLOY_USER}"
+            echo "User ${DEPLOY_USER} created."
+          else
+            echo "User ${DEPLOY_USER} already exists."
+          fi
+          usermod -aG docker "${DEPLOY_USER}"
+
+          echo "--- Setting up SSH for ${DEPLOY_USER} ---"
+          DEPLOY_SSH="/home/${DEPLOY_USER}/.ssh"
+          mkdir -p "${DEPLOY_SSH}"
+          SRC="/home/${BOOTSTRAP_USER}/.ssh/authorized_keys"
+          [ -f "${SRC}" ] && cp "${SRC}" "${DEPLOY_SSH}/authorized_keys"
+          chown -R ${DEPLOY_USER}:${DEPLOY_USER} "${DEPLOY_SSH}"
+          chmod 700 "${DEPLOY_SSH}"
+          chmod 600 "${DEPLOY_SSH}/authorized_keys" 2>/dev/null || true
+
+          echo "--- Creating deploy directory ---"
+          mkdir -p "${DEPLOY_PATH}"
+          chown ${DEPLOY_USER}:${DEPLOY_USER} "${DEPLOY_PATH}"
+
+          echo "--- Configuring firewall ---"
+          if command -v ufw &>/dev/null; then
+            ufw allow 22/tcp  >/dev/null 2>&1 || true
+            ufw allow 80/tcp  >/dev/null 2>&1 || true
+            ufw allow 443/tcp >/dev/null 2>&1 || true
+            echo "y" | ufw enable >/dev/null 2>&1 || true
+            echo "UFW configured (22, 80, 443)."
+          fi
+
+          echo "==> Bootstrap complete."
+          EOF
+
+      - name: Push deploy key to server
+        if: steps.check.outputs.initialized == 'false'
+        run: |
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          # Push CI SSH key as deploy user's id_ed25519 (for git clone from GitHub)
+          ssh ${SSH_USER}@${SSH_HOST} "mkdir -p ~/.ssh && cat > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519" < ~/.ssh/id_ed25519
+          ssh ${SSH_USER}@${SSH_HOST} 'ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null'
+
+      - name: Clone repo on server
+        if: steps.check.outputs.initialized == 'false'
+        run: |
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+          ssh ${SSH_USER}@${SSH_HOST} "git clone git@github.com:Morflight/ReverseProxy.git ${DEPLOY_PATH}"
+
+      - name: Init Traefik
+        if: steps.check.outputs.initialized == 'false'
+        run: |
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+          # Inject .env first (needed for make start)
+          sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" \
+            | jq -r '.app | to_entries | .[] | .key + "=" + .value' > /tmp/app.env
+          scp /tmp/app.env ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
+          rm /tmp/app.env
+          # Create network (|| true in case it already exists) and start Traefik
+          ssh ${SSH_USER}@${SSH_HOST} "cd ${DEPLOY_PATH} && make create-network || true && make start"
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+
   deploy:
     name: Deploy (${{ matrix.server.name }})
-    needs: prepare
+    needs: [prepare, bootstrap]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -70,31 +234,27 @@ jobs:
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
 
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ steps.ci.outputs.ssh_key }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ steps.ci.outputs.ssh_host }} >> ~/.ssh/known_hosts
+
       - name: Deploy code
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ steps.ci.outputs.ssh_host }}
-          username: ${{ steps.ci.outputs.ssh_user }}
-          key: ${{ steps.ci.outputs.ssh_key }}
-          script: |
-            cd ${{ matrix.server.deploy_path }}
-            git fetch --tags --force
-            git checkout ${{ github.ref_name }}
+        run: |
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+          ssh ${SSH_USER}@${SSH_HOST} "cd ${DEPLOY_PATH} && git fetch --tags --force && git checkout ${{ github.ref_name }}"
 
       - name: Inject env
         run: |
-          echo "${{ steps.ci.outputs.ssh_key }}" > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
-          scp -i /tmp/deploy_key -o StrictHostKeyChecking=no \
-            /tmp/app.env ${{ steps.ci.outputs.ssh_user }}@${{ steps.ci.outputs.ssh_host }}:${{ matrix.server.deploy_path }}/.env
-          rm /tmp/deploy_key
+          scp /tmp/app.env ${{ steps.ci.outputs.ssh_user }}@${{ steps.ci.outputs.ssh_host }}:${{ matrix.server.deploy_path }}/.env
 
       - name: Deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ steps.ci.outputs.ssh_host }}
-          username: ${{ steps.ci.outputs.ssh_user }}
-          key: ${{ steps.ci.outputs.ssh_key }}
-          script: |
-            cd ${{ matrix.server.deploy_path }}
-            make deploy
+        run: |
+          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
+          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
+          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
+          ssh ${SSH_USER}@${SSH_HOST} "cd ${DEPLOY_PATH} && make deploy"
