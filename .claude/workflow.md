@@ -27,3 +27,15 @@ Use slash commands to start a workflow:
 - Before asking to commit, update any `.claude/` files affected by the changes:
   - New/modified routing rules or connected projects → `common-tasks.md`
   - New/modified setup steps → `dev-setup.md`
+
+## Backlog Integration
+
+If a `.claude/backlog.md` exists in the project:
+
+- **Before starting work:** read the backlog to understand current priorities and check if the task matches an existing item
+- **When starting an item:** mark it `in-progress` in the backlog
+- **When work is complete:** mark the item `done` (with today's date) and move it to the Done section
+- **If work produces new follow-ups:** add them to the backlog with appropriate priority
+- **If a blocker is discovered:** mark the item `blocked` with a note explaining why
+- **Trello sync:** if `TRELLO_API_KEY`, `TRELLO_TOKEN`, and `TRELLO_BOARD_ID` are set, all backlog changes are automatically pushed to the project's Trello board — no extra action needed
+
