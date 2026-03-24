@@ -23,7 +23,7 @@ providers:
     network: reverse-proxy
     exposedByDefault: false
   file:
-    filename: /etc/traefik/ssl.yml
+    directory: /etc/traefik/dynamic
     watch: true
 
 certificatesResolvers:
