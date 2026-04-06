@@ -54,7 +54,9 @@ generate-certificates-dev:
         mkcert -install && \
         mkcert -cert-file certs/cert.pem \
             -key-file certs/cert-key.pem \
-            "*.local.com"; \
+            "*.local.com" \
+            "*.zaitchick.local.com" \
+            "*.conforme.local.com"; \
     fi
 
 
