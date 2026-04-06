@@ -2,7 +2,7 @@ log:
   level: INFO
 
 api:
-  insecure: false
+  insecure: true
   dashboard: true
 
 entryPoints:
@@ -23,7 +23,7 @@ providers:
     network: reverse-proxy
     exposedByDefault: false
   file:
-    directory: /etc/traefik/dynamic
+    filename: /etc/traefik/ssl.yml
     watch: true
 
 certificatesResolvers:
