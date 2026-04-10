@@ -1,4 +1,4 @@
-.PHONY: create-network check-env deploy start stop generate-certificates-dev \
+.PHONY: create-network check-env deploy start stop generate-certificates-dev smoke \
        server-init server-bootstrap server-clone server-deploy-env server-init-project server-status server-ssh
 
 ifeq ($(wildcard .env),)
@@ -48,6 +48,9 @@ start:
 
 stop:
 	docker compose -f docker-compose.yaml $(DOCKER_ENV_FLAG) down
+
+smoke:
+	@docker ps --filter name=traefik --filter status=running --format '{{.Names}}' | grep -q traefik && echo "smoke: traefik up" || (echo "smoke: traefik not running" && exit 1)
 
 generate-certificates-dev:
 	if [ "$(ENV)" = "dev" ] || [ "$(ENV)" = "local" ]; then \
