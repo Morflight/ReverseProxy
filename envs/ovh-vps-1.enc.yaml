@@ -12,14 +12,14 @@ app:
     ACME_EMAIL: ENC[AES256_GCM,data:TrGz8O5b9USdT1T/G/TxD4HKnIDWJjXbalGA,iv:2Sqa9XFFEAqiMlllUnXbRD0tOFrG3NQvL5PLTVP8Zbc=,tag:/Yud0wts61MQDsqkTr49tg==,type:str]
 sops:
     age:
-        - recipient: age12phpyyr8ddgun4wjhckwr9rns87wnk4c6vxemqgfdfmn4txl23qsxp2vpc
+        - recipient: age1zza8qv2y4lpwfj2s3v83vzks6fmhw49j8mzsels60tyzttrs0cqqx4d3pw
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB5YUdRR212NEk3UDhLd2hQ
-            dElWaHpvdVROV2tvVE1UNXMxVXlPQktINmxZClI4YTN4RkMzV1IyNHdMUHlrQ0pl
-            bTd2VzhyVDErWUJHRDZ0a1MzcnBYOTgKLS0tIFhYZUdFVEo1dDhhK2w3THFMWHBq
-            WHlxMVRZNkpKWVFFVit4RGpvZVVoV0UKpZPL+Kcqquuqf4dMHyeEaTl95aaGYUcS
-            zbIy1YrIFog99uIBi8xOdq8EN2k+4W/gIvcSSTLesr1nr6w86VbxZA==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBhYS9obDZWM2k3SWg2SnlQ
+            WlhJbWpadnc2UGZoSUpWNzJZenB2S1FaR0FrCmJUL3RFWmppTklVK0UxK0FRRzky
+            bjhWNmJEVlp3aTArWjZqd1g5QUhlU28KLS0tIExkZDJvdVN5MmF5OHpzSnU0VERy
+            dzA3b29USkxaRWZwSTBDZWN3Zys0aHcKeCoMWMG10xvd0tMv9vGQi5BC/HD5I8wA
+            hR5wMiSyxkrguTH6URw6xkYbmVv0di6g5VeBOlEESPWur/4HhfFywA==
             -----END AGE ENCRYPTED FILE-----
     lastmodified: "2026-04-06T14:55:00Z"
     mac: ENC[AES256_GCM,data:N3s1Tv6ZDeJwNJ477p6XjN2tcUMCeqP/qORsYHLJXPAhvkRHR1v0RVOXVQDtarMV3qmqGm3hqpSQbAIxt4tLIFHI3gXpqLzZwR5LBKt/Se4u8DmmN+LGJg/SwDcOpupzgFw8pvkUuwRuELRHKr2E1TPNvCBA5jLe2F3BAaNDb/M=,iv:Bw60irKyboKb0B1qwYXLifk7rGpA5WqX0EDZHiN+KPw=,tag:g8DBKFYHVZ9lXMw32EVXTA==,type:str]
