@@ -29,6 +29,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
+      email: ajammes@black-oak.fr
       storage: /etc/traefik/acme/acme.json
       httpChallenge:
         entryPoint: http
