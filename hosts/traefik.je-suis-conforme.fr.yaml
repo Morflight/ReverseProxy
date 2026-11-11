@@ -1,0 +1,19 @@
+services:
+  traefik:
+    environment:
+      # Let the two legacy hosts redirect directly to their canonical HTTPS URLs.
+      TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_PRIORITY: "10000"
+    labels:
+      traefik.http.routers.zaitchik-redirect-http.rule: Host(`zaitchik.fr`) || Host(`admin.zaitchik.fr`)
+      traefik.http.routers.zaitchik-redirect-http.entrypoints: http
+      traefik.http.routers.zaitchik-redirect-http.priority: "10001"
+      traefik.http.routers.zaitchik-redirect-http.service: noop@internal
+      traefik.http.routers.zaitchik-redirect-http.middlewares: zaitchik-canonical
+      traefik.http.routers.zaitchik-redirect-https.rule: Host(`zaitchik.fr`) || Host(`admin.zaitchik.fr`)
+      traefik.http.routers.zaitchik-redirect-https.entrypoints: https
+      traefik.http.routers.zaitchik-redirect-https.priority: "10001"
+      traefik.http.routers.zaitchik-redirect-https.service: noop@internal
+      traefik.http.routers.zaitchik-redirect-https.middlewares: zaitchik-canonical
+      traefik.http.middlewares.zaitchik-canonical.redirectregex.regex: '(?i)^https?://(admin\.)?zaitchik\.fr(?::[0-9]+)?(/.*)$'
+      traefik.http.middlewares.zaitchik-canonical.redirectregex.replacement: 'https://$${1}zaitchick.fr$${2}'
+      traefik.http.middlewares.zaitchik-canonical.redirectregex.permanent: "true"

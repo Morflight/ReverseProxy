@@ -6,12 +6,13 @@ PROXY_NETWORK ?= reverse-proxy
 export PROXY_NETWORK
 ifeq ($(ENV),prod)
 OVERLAY := docker-compose.prod.yaml
+HOST_OVERLAY := $(wildcard hosts/$(TRAEFIK_HOSTNAME).yaml)
 else ifneq ($(filter $(ENV),dev local),)
 OVERLAY := docker-compose.dev.yaml
 else
 $(error ENV must be dev, local or prod)
 endif
-COMPOSE := docker compose -f docker-compose.yaml -f $(OVERLAY)
+COMPOSE := docker compose -f docker-compose.yaml -f $(OVERLAY) $(addprefix -f ,$(HOST_OVERLAY))
 .PHONY: create-network check-env start stop deploy smoke server-init server-bootstrap server-clone server-deploy-env server-init-project server-status server-ssh
 
 ifeq ($(ENV),prod)

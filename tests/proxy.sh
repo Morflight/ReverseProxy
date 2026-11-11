@@ -105,7 +105,7 @@ services:
       - "${TEST_DIR}/ca.pem:/test-ca.pem:ro"
     networks:
       reverse-proxy:
-        aliases: [proxycheck.test, admin.proxycheck.test, dashboard.proxycheck.test]
+        aliases: [proxycheck.test, admin.proxycheck.test, dashboard.proxycheck.test, zaitchik.fr, admin.zaitchik.fr]
   pebble:
     image: ${PEBBLE_IMAGE}
     command: ["-config", "/fixture.json"]
@@ -117,7 +117,7 @@ services:
     networks: [reverse-proxy]
     ports: ["127.0.0.1::15000"]
 YAML
-extra=(-f "$tmp/prod-fixture.yml")
+extra=(-f hosts/traefik.je-suis-conforme.fr.yaml -f "$tmp/prod-fixture.yml")
 compose up -d pebble
 compose up -d
 httpport=$(port traefik 80)
@@ -133,6 +133,20 @@ tls "$APP_HOST" / -fsS | grep -q 'Welcome to nginx'
 tls "admin.$APP_HOST" / -fsS | grep -q 'Welcome to nginx'
 [[ $(tls "$TRAEFIK_HOSTNAME" /dashboard/ -s -o /dev/null -w '%{http_code}') == 401 ]]
 tls "$TRAEFIK_HOSTNAME" /dashboard/ -fsS -u tester:test-password >/dev/null
+# Verify the Location header exactly, including escaped bytes and repeated keys.
+for prefix in '' 'admin.'; do
+  old="${prefix}zaitchik.fr"
+  for path in '/' '/archive/a%20b?tag=a%2Fb&tag=c+z&empty='; do
+    expected="301 https://${prefix}zaitchick.fr$path"
+    format='%{http_code} %{redirect_url}'
+    actual=$(curl --noproxy '*' -sS -o /dev/null -w "$format" \
+      --resolve "$old:$httpport:127.0.0.1" "http://$old:$httpport$path")
+    [[ $actual == "$expected" ]]
+    actual=$(tls "$old" "$path" -sS --retry 10 --retry-all-errors --retry-delay 1 -o /dev/null -w "$format")
+    [[ $actual == "$expected" ]]
+  done
+done
+echo "PASS permanent public/admin hostname redirects over HTTP and HTTPS"
 # A fresh container must serve trusted TLS using only persisted ACME state.
 compose stop pebble
 compose up -d --no-deps --force-recreate traefik
