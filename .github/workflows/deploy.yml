@@ -6,7 +6,13 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   validate:
     name: Validate
     runs-on: ubuntu-latest
@@ -32,7 +38,7 @@ jobs:
 
   prepare:
     name: Prepare matrix
-    needs: validate
+    needs: [validate, ci]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -61,26 +67,20 @@ jobs:
       - name: Decrypt secrets
         id: ci
         run: |
+          umask 077
           sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" > /tmp/decrypted.json
           echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           BOOTSTRAP_USER=$(jq -r '.ci.bootstrap_user // empty' /tmp/decrypted.json)
           echo "bootstrap_user=${BOOTSTRAP_USER}" >> $GITHUB_OUTPUT
-          SSH_KEY=$(jq -r '.ci.ssh_private_key' /tmp/decrypted.json)
-          echo "::add-mask::$SSH_KEY"
-          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "ssh_key<<$EOF_MARKER" >> $GITHUB_OUTPUT
-          echo "$SSH_KEY" >> $GITHUB_OUTPUT
-          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+          install -d -m 700 ~/.ssh
+          jq -er '.ci.ssh_private_key' /tmp/decrypted.json > ~/.ssh/id_ed25519
           rm /tmp/decrypted.json
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
 
       - name: Setup SSH
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ steps.ci.outputs.ssh_key }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ steps.ci.outputs.ssh_host }} >> ~/.ssh/known_hosts
 
       - name: Check if server is initialized
@@ -189,22 +189,6 @@ jobs:
           DEPLOY_PATH="${{ matrix.server.deploy_path }}"
           ssh ${SSH_USER}@${SSH_HOST} "git clone git@github.com:Morflight/ReverseProxy.git ${DEPLOY_PATH}"
 
-      - name: Init Traefik
-        if: steps.check.outputs.initialized == 'false'
-        run: |
-          SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
-          SSH_USER="${{ steps.ci.outputs.ssh_user }}"
-          DEPLOY_PATH="${{ matrix.server.deploy_path }}"
-          # Inject .env first (needed for make start)
-          sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" \
-            | jq -r '.app | to_entries | .[] | .key + "=" + .value' > /tmp/app.env
-          scp /tmp/app.env ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
-          rm /tmp/app.env
-          # Create network (|| true in case it already exists) and start Traefik
-          ssh ${SSH_USER}@${SSH_HOST} "cd ${DEPLOY_PATH} && make create-network || true && make start"
-        env:
-          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-
   deploy:
     name: Deploy (${{ matrix.server.name }})
     needs: [prepare, bootstrap]
@@ -226,15 +210,12 @@ jobs:
       - name: Decrypt and extract secrets
         id: ci
         run: |
+          umask 077
           sops -d --output-type json "envs/${{ matrix.server.name }}.enc.yaml" > /tmp/decrypted.json
           echo "ssh_host=$(jq -r '.ci.ssh_host' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
           echo "ssh_user=$(jq -r '.ci.ssh_user' /tmp/decrypted.json)" >> $GITHUB_OUTPUT
-          SSH_KEY=$(jq -r '.ci.ssh_private_key' /tmp/decrypted.json)
-          echo "::add-mask::$SSH_KEY"
-          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "ssh_key<<$EOF_MARKER" >> $GITHUB_OUTPUT
-          echo "$SSH_KEY" >> $GITHUB_OUTPUT
-          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+          install -d -m 700 ~/.ssh
+          jq -er '.ci.ssh_private_key' /tmp/decrypted.json > ~/.ssh/id_ed25519
           jq -r '.app | to_entries | .[] | .key + "=" + .value' /tmp/decrypted.json > /tmp/app.env
           rm /tmp/decrypted.json
         env:
@@ -242,9 +223,6 @@ jobs:
 
       - name: Setup SSH
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ steps.ci.outputs.ssh_key }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ steps.ci.outputs.ssh_host }} >> ~/.ssh/known_hosts
 
       - name: Deploy code
@@ -252,7 +230,8 @@ jobs:
           SSH_USER="${{ steps.ci.outputs.ssh_user }}"
           SSH_HOST="${{ steps.ci.outputs.ssh_host }}"
           DEPLOY_PATH="${{ matrix.server.deploy_path }}"
-          ssh ${SSH_USER}@${SSH_HOST} "cd ${DEPLOY_PATH} && git fetch --tags --force && git checkout ${{ github.ref_name }}"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          ssh "${SSH_USER}@${SSH_HOST}" "cd ${DEPLOY_PATH} && git fetch origin --tags --force && git checkout --detach '$GITHUB_SHA'"
 
       - name: Inject env
         run: |

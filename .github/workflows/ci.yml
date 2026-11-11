@@ -1,10 +1,14 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [master]
   pull_request:
     branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -12,6 +16,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check GitHub workflow syntax
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo \
+            rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 \
+            -shellcheck= -pyflakes=
+
+      - name: Audit GitHub Actions security
+        run: |
+          docker run --rm -v "$PWD/.github/workflows:/repo/.github/workflows:ro" \
+            ghcr.io/zizmorcore/zizmor@sha256:c5bbdb28b75702f181695d7a878e562ccb5c0a01847db87edda7476908d73dd6 \
+            --offline --min-severity high /repo/.github/workflows
+
+      - name: Check shell scripts
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo \
+            koalaman/shellcheck@sha256:2097951f02e735b613f4a34de20c40f937a6c8f18ecb170612c88c34517221fb \
+            --severity=error check.sh tests/proxy.sh playbook/scripts/*.sh
 
       - name: Exercise local and production routing
         run: tests/proxy.sh
