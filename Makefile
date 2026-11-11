@@ -1,71 +1,46 @@
-.PHONY: create-network check-env deploy start stop generate-certificates-dev smoke \
-       server-init server-bootstrap server-clone server-deploy-env server-init-project server-status server-ssh
-
-ifeq ($(wildcard .env),)
-    $(info Creating .env file from .env.dist)
-    $(shell cp .env.dist .env)
-endif
-
-include .env
-
-SHELL = /bin/bash
-
-TRAEFIK_USER := $(shell docker run --rm -i xmartlabs/htpasswd $(TRAEFIK_USER_USERNAME) $(TRAEFIK_USER_PASSWORD))
-export TRAEFIK_USER
-
-ifeq ($(ENV), dev)
-    DOCKER_ENV_FLAG = -f docker-compose.dev.yaml
-else ifeq ($(ENV), local)
-    DOCKER_ENV_FLAG = -f docker-compose.dev.yaml
-else ifeq ($(ENV), prod)
-    DOCKER_ENV_FLAG = -f docker-compose.prod.yaml
+.DEFAULT_GOAL := start
+SHELL := /bin/bash
+-include .env
+ENV ?= dev
+PROXY_NETWORK ?= reverse-proxy
+export PROXY_NETWORK
+ifeq ($(ENV),prod)
+OVERLAY := docker-compose.prod.yaml
+else ifneq ($(filter $(ENV),dev local),)
+OVERLAY := docker-compose.dev.yaml
 else
-    DOCKER_ENV_FLAG =
+$(error ENV must be dev, local or prod)
+endif
+COMPOSE := docker compose -f docker-compose.yaml -f $(OVERLAY)
+.PHONY: create-network check-env start stop deploy smoke server-init server-bootstrap server-clone server-deploy-env server-init-project server-status server-ssh
+
+ifeq ($(ENV),prod)
+export TRAEFIK_USER_USERNAME TRAEFIK_USER_PASSWORD
+# Hash only when starting a production stack. Compose receives the result through its environment.
+PROD_AUTH = if [[ -z "$$TRAEFIK_USER" ]]; then : "$${TRAEFIK_USER_USERNAME:?Set dashboard user}" "$${TRAEFIK_USER_PASSWORD:?Set dashboard password}"; TRAEFIK_USER=$$(printf '%s\n' "$$TRAEFIK_USER_PASSWORD" | docker run --rm -i --entrypoint htpasswd httpd:2.4-alpine -niB "$$TRAEFIK_USER_USERNAME") || exit 1; export TRAEFIK_USER; fi;
 endif
 
 create-network:
-	docker network create --driver=bridge --attachable --internal=false reverse-proxy
+	@docker network inspect "$(PROXY_NETWORK)" >/dev/null 2>&1 || docker network create "$(PROXY_NETWORK)" || docker network inspect "$(PROXY_NETWORK)" >/dev/null
 
 check-env:
-	@missing=0; \
-	for key in $$(grep -oP '^[A-Z_]+(?==)' .env.dist); do \
-		if ! grep -qP "^$$key=" .env 2>/dev/null; then \
-			echo "Missing env var: $$key (defined in .env.dist but not in .env)"; \
-			missing=1; \
-		fi; \
-	done; \
-	if [ "$$missing" = "1" ]; then \
-		echo ""; \
-		echo "Fix: add the missing variable(s) to .env"; \
-		exit 1; \
-	fi; \
-	echo "All env vars present."
+	@$(PROD_AUTH) $(COMPOSE) config --quiet
 
-deploy: check-env stop start
-
-start:
-	docker compose -f docker-compose.yaml $(DOCKER_ENV_FLAG) up --build -d
+start deploy: create-network
+	@$(PROD_AUTH) $(COMPOSE) up -d --remove-orphans
 
 stop:
-	docker compose -f docker-compose.yaml $(DOCKER_ENV_FLAG) down
+	@$(PROD_AUTH) $(COMPOSE) --profile '*' down
 
+ifeq ($(ENV),prod)
+SMOKE_URL ?=
+else
+SMOKE_URL ?= http://traefik.localhost:$(or $(HTTP_PORT),80)/dashboard/
+endif
 smoke:
-	@docker ps --filter name=traefik --filter status=running --format '{{.Names}}' | grep -q traefik && echo "smoke: traefik up" || (echo "smoke: traefik not running" && exit 1)
+	@test -n "$(SMOKE_URL)" || { echo 'Set SMOKE_URL to a public app health URL'; exit 1; }
+	@./check.sh "$(SMOKE_URL)"
 
-generate-certificates-dev:
-	if [ "$(ENV)" = "dev" ] || [ "$(ENV)" = "local" ]; then \
-        mkcert -install && \
-        mkcert -cert-file certs/cert.pem \
-            -key-file certs/cert-key.pem \
-            "*.local.com" \
-            "*.zaitchick.local.com" \
-            "*.conforme.local.com"; \
-    fi
-
-
-##########################################
-##  Server Playbook (first-time setup)  ##
-##########################################
 
 SERVER ?= dedibox-1
 

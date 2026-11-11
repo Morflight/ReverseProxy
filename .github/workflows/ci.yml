@@ -13,5 +13,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate docker-compose config
-        run: docker compose -f docker-compose.yaml config --quiet
+      - name: Exercise local and production routing
+        run: tests/proxy.sh

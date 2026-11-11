@@ -1,18 +1,21 @@
 services:
-  mailcatcher:
-    image: schickling/mailcatcher
-    container_name: mailcatcher
-    restart: unless-stopped
+  traefik:
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-80}:80"
+    environment:
+      TRAEFIK_PROVIDERS_DOCKER_DEFAULTRULE: 'Host(`{{ normalize .Name }}.localhost`)'
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=reverse-proxy"
-      - "traefik.http.routers.mailcatcher-web.rule=Host(`mailcatcher.local.com`)"
-      - "traefik.http.routers.mailcatcher-web.entrypoints=http,https"
-      - "traefik.http.routers.mailcatcher-web.tls=true"
-      - "traefik.http.services.mailcatcher-web.loadbalancer.server.port=1080"
+      traefik.enable: "true"
+      traefik.http.routers.proxy-dashboard.rule: Host(`traefik.localhost`)
+      traefik.http.routers.proxy-dashboard.service: api@internal
+  mail:
+    image: axllent/mailpit:v1.22.3
+    profiles: [mail]
+    restart: unless-stopped
     networks:
-      - "reverse-proxy"
-
-networks:
-  reverse-proxy:
-    external: true
+      reverse-proxy:
+        aliases: [mailcatcher]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.proxy-mail.rule: Host(`mail.localhost`)
+      traefik.http.services.proxy-mail.loadbalancer.server.port: "8025"

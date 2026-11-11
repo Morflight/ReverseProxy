@@ -1,66 +1,38 @@
-Welcome to the documentation for this Reverse Proxy. This is a dockerized app that uses traefik to allow developers to work on various projects, all running in the background in the same time.
+# ReverseProxy
 
-## Table of Contents
+Run one proxy per Docker host. In WSL, `make start` creates the shared network and starts Traefik. Open http://traefik.localhost/dashboard/ from Windows. Local routes use HTTP on loopback. Run `make smoke` to check the dashboard, or `./check.sh http://app.localhost/health` to check an app. Set HTTP_PORT to test on a different port.
 
-- [Prerequisites](#prerequisites)
-- [How does it work ?](#how-does-it-work-?)
-- [Getting Started](#getting-started)
-- [Tools and Docs](#tools-and-docs)
+## Route an app
 
-## Prerequisites
+Attach the web service to its private network and the external proxy network. Give each router and service a unique name. Set APP_HOST to `app.localhost` locally and the public DNS name on the server.
 
-- This guide is for Linux, MacOS and WSL2 installations
-- Have Docker, Docker Compose and Make installed
+```yaml
+services:
+  web:
+    image: nginx:alpine
+    networks: [default, reverse-proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.myapp.rule: Host(`${APP_HOST:?Set APP_HOST}`)
+      traefik.http.services.myapp.loadbalancer.server.port: "80"
+
+networks:
+  reverse-proxy:
+    external: true
 ```
-sudo apt install docker docker-compose make
-```
 
-- Don't forget to add your user to the Docker group and restart your session for the changes to apply
-```
-sudo usermod -aG docker `whoami`
-```
-- For development environments, you also need mkcert to enable https
+Local opt-in containers without a Host rule receive a hostname based on Traefik's normalized Docker service name plus `.localhost`. Set an explicit rule for stable or nested names. For existing apps, move hard-coded entrypoint, TLS and certresolver labels out of the shared app definition when migrating. The proxy supplies these settings per environment.
 
-## How does it work ?
+## Local mail
 
-Traefik scans the DNS of your http requests and based on the configuration, reroutes you to the right app. This saves a lot of trouble when configuring your stack and allows seemless scaling without worrying too much about the port mapping.
+`COMPOSE_PROFILES=mail make start` adds Mailpit. Use http://mail.localhost and SMTP at `mail:1025` on the shared network. The legacy SMTP alias is `mailcatcher`.
 
-You can also configure security options (enable basic auth or https) with the reverse proxy and easily extend this configuration to the rest of your apps.
+## Production
 
-**WARNING** Do not use *.dev. as your DNS, you will run into issues because it is protected.
+Set ENV=prod, TRAEFIK_HOSTNAME, ACME_EMAIL, TRAEFIK_USER_USERNAME and TRAEFIK_USER_PASSWORD in the deployment environment. Existing SOPS-based deployments can supply these values. Alternatively supply TRAEFIK_USER as a precomputed htpasswd entry. Point public DNS at the server and allow inbound TCP 80 and 443. Run `make deploy`. Traefik redirects HTTP, issues per-host certificates via HTTP-01, and stores them in `acme/acme.json`. Preserve this directory when rolling back or changing releases. The HTTPS dashboard requires authentication. Supply a public app health URL to `make smoke SMOKE_URL=https://app.example.org/health`.
 
-## Getting Started
+`make stop` stops this Compose stack. Other projects can continue using the external Docker network.
 
-To get started, follow these steps:
+## Test both environments
 
-1. **Start the reverse proxy's network**: run `make create-network` you should only do this once unless you prune your networks.
-2. **Start Traefik**: run `make start`, you must do this every time you restart your machine
-3. **Add a DNS record for Traefik**: edit your /etc/hosts file and add the following line: `127.0.0.1 traefik.local.com`
-4. **Generate your certificates to enable https**: run `make generate-certificates-dev`
-5. **Trust the certificates in your browser**:
-   - **Linux**: `mkcert -install` (done automatically by step 4) handles it.
-   - **WSL2**: the browser runs on Windows, so you need to install the root CA there too:
-     ```bash
-     # Copy the root CA to Windows
-     cp "$(mkcert -CAROOT)/rootCA.pem" /mnt/c/Users/<your-windows-user>/rootCA.pem
-     ```
-     Then open **PowerShell as Administrator** on Windows and run:
-     ```powershell
-     certutil -addstore "Root" C:\Users\<your-windows-user>\rootCA.pem
-     ```
-     Restart your browser for the change to take effect.
-   - **Firefox** (any OS): Firefox uses its own trust store. Go to `about:config` and set `security.enterprise_roots.enabled` to `true` to trust the system certificates.
-
-And that's it. Traefik is now running. You can access the dashboard at (https://traefik.local.com)[https://traefik.local.com].
-The default credentials are admin:admin, but you can modify them by tweaking the .env file.
-
-Every time you run `make start` on your other apps, you should see new elements in the Router section. Don't forget to add DNS records for the other apps as well.
-
-
-## Tools and Docs
-
-- [Traefik](https://doc.traefik.io/traefik/)
-- [Docker](https://docs.docker.com/)
-- [Docker Compose](https://docs.docker.com/compose/)
-- [Make](https://www.gnu.org/software/make/manual/make.html)
-- [mkcert](https://github.com/FiloSottile/mkcert)
+Run `tests/proxy.sh` with Docker Compose 2.24.4 or later, curl and Python 3. It uses a temporary Docker network, loopback ports and a local Pebble ACME authority to exercise HTTP-01. On WSL it also probes a nested localhost name with Windows curl when available.

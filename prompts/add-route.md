@@ -6,7 +6,7 @@ Let's connect a new project to the reverse proxy. Use with `/new-feature`.
 <!-- e.g. MyNewProject -->
 
 ## Hostname
-<!-- e.g. mynewproject.local.com — remember: never use *.dev TLD -->
+<!-- e.g. mynewproject.localhost locally and the public DNS name in production -->
 
 ## Container to route to
 <!-- The nginx or server container that should receive traffic, e.g. mynewproject_nginx -->
@@ -18,7 +18,7 @@ Let's connect a new project to the reverse proxy. Use with `/new-feature`.
 <!-- Usually `reverse-proxy` — confirm the project joins this external network -->
 
 ## Environment
-<!-- dev (mkcert TLS) / prod (Let's Encrypt) / both -->
+<!-- dev (HTTP) / prod (Let's Encrypt) / both -->
 
 ## Already done
 <!-- Has the project already been added to the reverse-proxy network in its docker-compose? -->

@@ -1,8 +1,22 @@
 services:
   traefik:
-    labels:
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_TO: https
+      TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_SCHEME: https
+      TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS: ":443"
+      TRAEFIK_ENTRYPOINTS_HTTPS_ASDEFAULT: "true"
+      TRAEFIK_ENTRYPOINTS_HTTPS_HTTP_TLS_CERTRESOLVER: letsencrypt
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for production}
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE: /etc/traefik/acme/acme.json
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE_ENTRYPOINT: http
     volumes:
-      - type: bind
-        source: ./docker/ssl.prod.yaml
-        target: /etc/traefik/ssl.yml
+      - ./acme:/etc/traefik/acme
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.proxy-dashboard.rule: Host(`${TRAEFIK_HOSTNAME:?Set TRAEFIK_HOSTNAME for production}`)
+      traefik.http.routers.proxy-dashboard.service: api@internal
+      traefik.http.routers.proxy-dashboard.middlewares: proxy-dashboard-auth
+      traefik.http.middlewares.proxy-dashboard-auth.basicauth.users: ${TRAEFIK_USER:?Set the dashboard password hash via make}

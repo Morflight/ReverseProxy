@@ -1,36 +1,20 @@
 services:
   traefik:
     image: traefik:v3.6.11
-    container_name: traefik
     restart: unless-stopped
     security_opt:
-      - "no-new-privileges:true"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.entrypoints=https"
-      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_HOSTNAME}`)"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.middlewares=auth"
-      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_USER}"
-      - "traefik.http.routers.traefik.tls=true"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-    ports:
-      - "80:80"
-      - "443:443"
-    command:
-      - "traefik"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - no-new-privileges:true
+    environment:
+      TRAEFIK_PROVIDERS_DOCKER: "true"
+      TRAEFIK_PROVIDERS_DOCKER_NETWORK: ${PROXY_NETWORK:-reverse-proxy}
+      TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: "false"
+      TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS: ":80"
+      TRAEFIK_API_DASHBOARD: "true"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./certs:/etc/traefik/certs"
-      - "./acme:/etc/traefik/acme"
-      - "./docker/traefik.yaml:/etc/traefik/traefik.yml"
-      - type: bind
-        source: ./docker/ssl.yaml
-        target: /etc/traefik/ssl.yml
-    networks:
-      - "reverse-proxy"
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [reverse-proxy]
 
 networks:
   reverse-proxy:
     external: true
+    name: ${PROXY_NETWORK:-reverse-proxy}

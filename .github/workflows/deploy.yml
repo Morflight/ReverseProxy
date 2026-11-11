@@ -13,7 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate docker-compose config
-        run: docker compose -f docker-compose.yaml config --quiet
+        env:
+          ACME_EMAIL: ci@example.org
+          TRAEFIK_HOSTNAME: dashboard.example.org
+          TRAEFIK_USER: ci:validation-only
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.dev.yaml config --quiet
+          docker compose -f docker-compose.yaml -f docker-compose.prod.yaml config --quiet
       - name: Check encrypted env files exist for all deploy targets
         run: |
           for name in $(jq -r '.[].name' .github/deploy-targets.json); do
